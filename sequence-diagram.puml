@@ -1,0 +1,452 @@
+@startuml 系统时序图
+
+skinparam sequenceArrowThickness 2
+skinparam roundcorner 20
+skinparam maxmessagesize 60
+skinparam sequenceParticipant underline
+
+title 系统核心业务时序图
+
+actor "用户" as User
+participant "前端界面" as Frontend
+participant "API 网关" as Gateway
+participant "认证中间件" as AuthMiddleware
+participant "权限中间件" as PermMiddleware
+participant "业务控制器" as Controller
+participant "业务服务" as Service
+participant "数据访问层" as DAO
+database "数据库" as DB
+database "缓存" as Cache
+participant "日志服务" as Logger
+
+== 用户注册流程 ==
+
+User -> Frontend: 填写注册信息
+activate Frontend
+
+Frontend -> Frontend: 前端表单验证
+Frontend -> Gateway: POST /api/auth/register
+activate Gateway
+
+Gateway -> AuthMiddleware: 请求预处理
+activate AuthMiddleware
+AuthMiddleware -> AuthMiddleware: 检查请求头
+AuthMiddleware --> Gateway: 继续处理
+deactivate AuthMiddleware
+
+Gateway -> Controller: 转发注册请求
+activate Controller
+
+Controller -> Controller: 参数验证
+Controller -> Service: 调用注册服务
+activate Service
+
+Service -> DAO: 检查用户名是否存在
+activate DAO
+DAO -> DB: SELECT * FROM users WHERE username = ?
+activate DB
+DB --> DAO: 查询结果
+deactivate DB
+DAO --> Service: 用户不存在
+deactivate DAO
+
+Service -> Service: 密码加密处理
+Service -> DAO: 创建用户记录
+activate DAO
+DAO -> DB: INSERT INTO users (...)
+activate DB
+DB --> DAO: 插入成功
+deactivate DB
+DAO --> Service: 用户创建成功
+deactivate DAO
+
+Service -> Service: 生成 JWT Token
+Service -> Logger: 记录注册日志
+activate Logger
+Logger -> DB: INSERT INTO logs (...)
+deactivate Logger
+
+Service --> Controller: 返回 Token 和用户信息
+deactivate Service
+
+Controller --> Gateway: 返回成功响应
+deactivate Controller
+
+Gateway --> Frontend: 200 OK + Token
+deactivate Gateway
+
+Frontend -> Frontend: 保存 Token 到本地
+Frontend --> User: 显示注册成功
+deactivate Frontend
+
+== 用户登录流程 ==
+
+User -> Frontend: 输入用户名和密码
+activate Frontend
+
+Frontend -> Gateway: POST /api/auth/login
+activate Gateway
+
+Gateway -> Controller: 转发登录请求
+activate Controller
+
+Controller -> Service: 调用登录服务
+activate Service
+
+Service -> DAO: 查询用户信息
+activate DAO
+DAO -> Cache: 检查用户缓存
+activate Cache
+Cache --> DAO: 缓存未命中
+deactivate Cache
+
+DAO -> DB: SELECT * FROM users WHERE username = ?
+activate DB
+DB --> DAO: 返回用户信息
+deactivate DB
+DAO --> Service: 用户信息
+deactivate DAO
+
+Service -> Service: 验证密码
+Service -> Service: 生成 JWT Token
+Service -> Cache: 缓存用户信息
+activate Cache
+Cache --> Service: 缓存成功
+deactivate Cache
+
+Service -> Logger: 记录登录日志
+activate Logger
+Logger -> DB: INSERT INTO logs (...)
+deactivate Logger
+
+Service --> Controller: 返回 Token 和用户信息
+deactivate Service
+
+Controller --> Gateway: 返回成功响应
+deactivate Controller
+
+Gateway --> Frontend: 200 OK + Token
+deactivate Gateway
+
+Frontend -> Frontend: 保存 Token
+Frontend --> User: 跳转到主页
+deactivate Frontend
+
+== 业务数据查询流程 ==
+
+User -> Frontend: 请求查询数据
+activate Frontend
+
+Frontend -> Gateway: GET /api/business/data?params
+note right: 请求头携带 Token
+activate Gateway
+
+Gateway -> AuthMiddleware: Token 验证
+activate AuthMiddleware
+AuthMiddleware -> AuthMiddleware: 解析 Token
+AuthMiddleware -> Cache: 验证 Token 有效性
+activate Cache
+Cache --> AuthMiddleware: Token 有效
+deactivate Cache
+AuthMiddleware --> Gateway: 认证通过
+deactivate AuthMiddleware
+
+Gateway -> PermMiddleware: 权限验证
+activate PermMiddleware
+PermMiddleware -> Cache: 获取用户权限
+activate Cache
+Cache --> PermMiddleware: 权限列表
+deactivate Cache
+PermMiddleware -> PermMiddleware: 检查访问权限
+PermMiddleware --> Gateway: 授权通过
+deactivate PermMiddleware
+
+Gateway -> Controller: 转发查询请求
+activate Controller
+
+Controller -> Controller: 参数验证
+Controller -> Service: 调用查询服务
+activate Service
+
+Service -> Cache: 检查查询缓存
+activate Cache
+Cache --> Service: 缓存未命中
+deactivate Cache
+
+Service -> DAO: 查询数据
+activate DAO
+DAO -> DB: SELECT * FROM business_data WHERE ...
+activate DB
+DB --> DAO: 返回查询结果
+deactivate DB
+DAO --> Service: 数据列表
+deactivate DAO
+
+Service -> Service: 数据格式化
+Service -> Cache: 缓存查询结果
+activate Cache
+Cache --> Service: 缓存成功
+deactivate Cache
+
+Service -> Logger: 记录查询日志
+activate Logger
+Logger -> DB: INSERT INTO logs (...)
+deactivate Logger
+
+Service --> Controller: 返回数据
+deactivate Service
+
+Controller --> Gateway: 返回成功响应
+deactivate Controller
+
+Gateway --> Frontend: 200 OK + 数据
+deactivate Gateway
+
+Frontend -> Frontend: 渲染数据
+Frontend --> User: 显示查询结果
+deactivate Frontend
+
+== 业务数据录入流程 ==
+
+User -> Frontend: 填写业务数据
+activate Frontend
+
+Frontend -> Frontend: 前端验证
+Frontend -> Gateway: POST /api/business/data
+note right: 请求头携带 Token
+activate Gateway
+
+Gateway -> AuthMiddleware: Token 验证
+activate AuthMiddleware
+AuthMiddleware -> Cache: 验证 Token
+activate Cache
+Cache --> AuthMiddleware: Token 有效
+deactivate Cache
+AuthMiddleware --> Gateway: 认证通过
+deactivate AuthMiddleware
+
+Gateway -> PermMiddleware: 权限验证
+activate PermMiddleware
+PermMiddleware -> Cache: 获取用户权限
+activate Cache
+Cache --> PermMiddleware: 权限列表
+deactivate Cache
+PermMiddleware -> PermMiddleware: 检查录入权限
+PermMiddleware --> Gateway: 授权通过
+deactivate PermMiddleware
+
+Gateway -> Controller: 转发录入请求
+activate Controller
+
+Controller -> Controller: 数据验证
+Controller -> Service: 调用录入服务
+activate Service
+
+Service -> Service: 业务规则验证
+Service -> DAO: 开启事务
+activate DAO
+
+DAO -> DB: BEGIN TRANSACTION
+activate DB
+
+DAO -> DB: INSERT INTO business_data (...)
+DB --> DAO: 插入成功
+
+DAO -> DB: UPDATE related_table SET ...
+DB --> DAO: 更新成功
+
+DAO -> DB: COMMIT
+DB --> DAO: 事务提交成功
+deactivate DB
+
+DAO --> Service: 数据录入成功
+deactivate DAO
+
+Service -> Cache: 清除相关缓存
+activate Cache
+Cache --> Service: 缓存清除成功
+deactivate Cache
+
+Service -> Logger: 记录操作日志
+activate Logger
+Logger -> DB: INSERT INTO logs (...)
+deactivate Logger
+
+Service --> Controller: 返回成功信息
+deactivate Service
+
+Controller --> Gateway: 返回成功响应
+deactivate Controller
+
+Gateway --> Frontend: 200 OK
+deactivate Gateway
+
+Frontend --> User: 显示录入成功
+deactivate Frontend
+
+== 业务数据更新流程（含事务回滚） ==
+
+User -> Frontend: 修改业务数据
+activate Frontend
+
+Frontend -> Gateway: PUT /api/business/data/:id
+activate Gateway
+
+Gateway -> AuthMiddleware: Token 验证
+activate AuthMiddleware
+AuthMiddleware --> Gateway: 认证通过
+deactivate AuthMiddleware
+
+Gateway -> PermMiddleware: 权限验证
+activate PermMiddleware
+PermMiddleware --> Gateway: 授权通过
+deactivate PermMiddleware
+
+Gateway -> Controller: 转发更新请求
+activate Controller
+
+Controller -> Service: 调用更新服务
+activate Service
+
+Service -> DAO: 查询原始数据
+activate DAO
+DAO -> DB: SELECT * FROM business_data WHERE id = ?
+activate DB
+DB --> DAO: 返回原始数据
+deactivate DB
+DAO --> Service: 原始数据
+deactivate DAO
+
+Service -> Service: 数据对比和验证
+Service -> DAO: 开启事务
+activate DAO
+
+DAO -> DB: BEGIN TRANSACTION
+activate DB
+
+DAO -> DB: UPDATE business_data SET ... WHERE id = ?
+DB --> DAO: 更新成功
+
+DAO -> DB: UPDATE related_table SET ...
+DB --> DAO: 更新失败（约束冲突）
+note right: 模拟更新失败场景
+
+DAO -> DB: ROLLBACK
+DB --> DAO: 事务回滚成功
+deactivate DB
+
+DAO --> Service: 更新失败
+deactivate DAO
+
+Service -> Logger: 记录错误日志
+activate Logger
+Logger -> DB: INSERT INTO logs (...)
+deactivate Logger
+
+Service --> Controller: 返回失败信息
+deactivate Service
+
+Controller --> Gateway: 返回错误响应
+deactivate Controller
+
+Gateway --> Frontend: 400 Bad Request
+deactivate Gateway
+
+Frontend --> User: 显示错误提示
+deactivate Frontend
+
+== 数据分析流程 ==
+
+User -> Frontend: 请求数据分析
+activate Frontend
+
+Frontend -> Gateway: GET /api/business/analysis?params
+activate Gateway
+
+Gateway -> AuthMiddleware: Token 验证
+activate AuthMiddleware
+AuthMiddleware --> Gateway: 认证通过
+deactivate AuthMiddleware
+
+Gateway -> PermMiddleware: 权限验证
+activate PermMiddleware
+PermMiddleware --> Gateway: 授权通过
+deactivate PermMiddleware
+
+Gateway -> Controller: 转发分析请求
+activate Controller
+
+Controller -> Service: 调用分析服务
+activate Service
+
+Service -> Cache: 检查分析缓存
+activate Cache
+Cache --> Service: 缓存命中
+deactivate Cache
+
+Service -> Logger: 记录分析日志
+activate Logger
+Logger -> DB: INSERT INTO logs (...)
+deactivate Logger
+
+Service --> Controller: 返回分析结果
+deactivate Service
+
+Controller --> Gateway: 返回成功响应
+deactivate Controller
+
+Gateway --> Frontend: 200 OK + 分析数据
+deactivate Gateway
+
+Frontend -> Frontend: 渲染图表
+Frontend --> User: 显示分析报告
+deactivate Frontend
+
+== 用户登出流程 ==
+
+User -> Frontend: 点击登出
+activate Frontend
+
+Frontend -> Gateway: POST /api/auth/logout
+activate Gateway
+
+Gateway -> AuthMiddleware: Token 验证
+activate AuthMiddleware
+AuthMiddleware --> Gateway: 认证通过
+deactivate AuthMiddleware
+
+Gateway -> Controller: 转发登出请求
+activate Controller
+
+Controller -> Service: 调用登出服务
+activate Service
+
+Service -> Cache: 删除用户缓存
+activate Cache
+Cache --> Service: 缓存删除成功
+deactivate Cache
+
+Service -> Cache: 将 Token 加入黑名单
+activate Cache
+Cache --> Service: 黑名单添加成功
+deactivate Cache
+
+Service -> Logger: 记录登出日志
+activate Logger
+Logger -> DB: INSERT INTO logs (...)
+deactivate Logger
+
+Service --> Controller: 登出成功
+deactivate Service
+
+Controller --> Gateway: 返回成功响应
+deactivate Controller
+
+Gateway --> Frontend: 200 OK
+deactivate Gateway
+
+Frontend -> Frontend: 清除本地 Token
+Frontend --> User: 跳转到登录页
+deactivate Frontend
+
+@enduml

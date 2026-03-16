@@ -1,0 +1,49 @@
+{
+  "repositories": [
+    {
+      "name": "project-alpha",
+      "path": "D:\\projects\\project-alpha",
+      "enabled": true,
+      "description": "C++ 项目示例"
+    },
+    {
+      "name": "project-beta",
+      "path": "D:\\projects\\project-beta",
+      "enabled": true,
+      "description": "Java Spring Boot 项目"
+    },
+    {
+      "name": "project-gamma",
+      "path": "D:\\projects\\project-gamma",
+      "enabled": true,
+      "description": "TypeScript + React 项目"
+    },
+    {
+      "name": "project-delta",
+      "path": "D:\\projects\\project-delta",
+      "enabled": false,
+      "description": "Python FastAPI 项目 (暂时禁用)"
+    }
+  ],
+  "gitConfig": {
+    "user": "Claude Bot",
+    "email": "claude-bot@company.com",
+    "commitMessage": "chore: auto-update CLAUDE.md [bot]",
+    "autoPush": false
+  },
+  "schedule": {
+    "enabled": true,
+    "time": "02:00",
+    "description": "凌晨 2 点自动运行"
+  },
+  "notifications": {
+    "email": {
+      "enabled": false,
+      "recipients": ["team-lead@company.com"]
+    },
+    "slack": {
+      "enabled": false,
+      "webhook": "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+    }
+  }
+}
