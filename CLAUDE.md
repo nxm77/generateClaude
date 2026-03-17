@@ -1,45 +1,138 @@
-﻿# cx - 项目文档索引
+# CLAUDE.md
 
-> **项目类型**: 通用软件项目
-> **技术栈**: 未检测到
-> **框架**: 未检测到
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-本项目的完整文档结构如下：
+## 项目概述
 
-## 📋 核心文档
+CLAUDE.md 自动化维护工具 - 基于 2026 年最佳实践的企业级 CLAUDE.md 生成和维护解决方案。支持单项目生成、批量处理和定时任务自动化。
 
-### 1. [需求分析文档](./requirements-analysis.md)
-项目需求的详细分析，包括功能需求、非功能需求、用户故事等
+## 核心命令
 
-### 2. [文件功能列表](./file-functions.md)
-项目中所有文件的功能说明和职责划分
+### 环境检查
+```powershell
+.\check-environment.ps1
+```
 
-## 📊 可视化图表
+### 单项目生成
+```powershell
+# 预览模式
+.\regenerate-claude-md.ps1 -ProjectPath "D:\projects\my-app" -DryRun
 
-### 3. [系统功能全图](./system-overview.puml)
-使用 PlantUML 绘制的系统整体功能架构图
+# 正式生成
+.\regenerate-claude-md.ps1 -ProjectPath "D:\projects\my-app"
+```
 
-### 4. [模块流程图](./module-flowchart.puml)
-使用 PlantUML 绘制的各模块业务流程图
+### 批量处理
+```powershell
+# 预览批量更新
+.\batch-regenerate-claude-md.ps1 -ConfigFile repos-config.json -DryRun
 
-### 5. [时序图](./sequence-diagram.puml)
-使用 PlantUML 绘制的系统交互时序图
+# 正式批量更新
+.\batch-regenerate-claude-md.ps1 -ConfigFile repos-config.json
 
----
+# 自动提交到 Git
+.\batch-regenerate-claude-md.ps1 -ConfigFile repos-config.json -AutoCommit
+```
 
-## 📖 如何使用
+### 定时任务设置
+```powershell
+# 设置每天凌晨 2 点自动运行
+.\setup-scheduled-task.ps1 -ScriptPath "D:\cx\batch-regenerate-claude-md.ps1" -ConfigPath "D:\cx\repos-config.json" -Time "02:00"
 
-- **查看 PlantUML 图表**：使用支持 PlantUML 的工具（如 VS Code + PlantUML 插件）打开 `.puml` 文件
-- **在线预览**：可以将 `.puml` 文件内容复制到 [PlantUML Online Editor](http://www.plantuml.com/plantuml/uml/)
+# 测试运行
+Start-ScheduledTask -TaskName "Claude-MD-Auto-Update"
+```
 
-## 🔄 文档状态
+### 智能文档生成
+```powershell
+# 基础模式
+.\generate-docs-smart.ps1
 
-- [ ] 需求分析文档 - 待生成
-- [ ] 文件功能列表 - 待生成
-- [ ] 系统功能全图 - 待生成
-- [ ] 模块流程图 - 待生成
-- [ ] 时序图 - 待生成
+# 深度分析模式
+.\generate-docs-smart.ps1 -Deep
 
----
+# 指定目录
+.\generate-docs-smart.ps1 -Path "C:\path\to\project"
+```
 
-*最后更新时间：2026-03-17*
+## 项目架构
+
+### 核心脚本
+- `regenerate-claude-md.ps1` - 单项目 CLAUDE.md 生成引擎
+- `batch-regenerate-claude-md.ps1` - 批量处理多个项目
+- `generate-docs-smart.ps1` - 智能三阶段文档生成（需求分析、文件功能、PlantUML 图表）
+- `setup-scheduled-task.ps1` - Windows 定时任务配置
+- `check-environment.ps1` - 环境依赖检查
+
+### 配置文件
+- `repos-config.json` - 批量处理项目配置（基于 repos-config.example.json）
+- `openspec/config.yaml` - OpenSpec 工作流配置
+
+### 输出目录
+- `output/` - 单项目生成结果
+- `batch-output/` - 批量处理结果和汇总报告
+
+## 技术栈支持
+
+自动检测并支持以下技术栈：
+- TypeScript/Node.js (package.json)
+- Python (requirements.txt, pyproject.toml)
+- Java (pom.xml, build.gradle)
+- C++ (CMakeLists.txt, Makefile)
+- C# (.csproj, .sln)
+- VB.NET (.vbproj)
+
+## 代码规范
+
+### CLAUDE.md 生成规范
+- **目标长度**: 40-80 行（理想）
+- **上限**: 200 行（可接受）
+- **超过 300 行**: 必须精简
+
+### 内容原则
+- 只包含 Claude 无法推断的信息
+- 避免标准语言约定和 Linter 规则
+- 使用文件引用代替代码示例
+- 关注项目特定的架构和陷阱
+
+### PowerShell 脚本规范
+- 使用详细的注释和帮助文档
+- 提供 -DryRun 预览模式
+- 自动备份原文件
+- 生成详细的变更报告
+
+## 验证步骤
+
+### 生成后验证
+```powershell
+# 检查生成的文件长度
+(Get-Content .\output\CLAUDE.md.new).Count
+
+# 查看变更报告
+notepad .\output\changes-report.md
+
+# 对比新旧版本
+git diff .\output\CLAUDE.md.old .\output\CLAUDE.md.new
+```
+
+### 测试 Claude 读取
+```powershell
+cd D:\projects\target-project
+claude
+# Claude 会自动读取 CLAUDE.md
+```
+
+## 常见陷阱
+
+1. **路径包含空格** - 必须使用引号包裹路径
+2. **执行策略限制** - 运行 `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`
+3. **Claude CLI 未安装** - 运行 `npm install -g @anthropic-ai/claude-code`
+4. **配置文件格式错误** - 参考 repos-config.example.json 的 JSON 格式
+5. **生成内容过长** - 查看 changes-report.md 中的精简建议
+
+## 参考文档
+
+- [QUICKSTART.md](QUICKSTART.md) - 5 分钟快速上手
+- [OVERVIEW.md](OVERVIEW.md) - 工具套件总览
+- [README.md](README.md) - 项目主文档
+- [INSTALLATION.md](INSTALLATION.md) - 安装指南
