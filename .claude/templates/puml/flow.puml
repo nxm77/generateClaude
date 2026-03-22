@@ -1,0 +1,18 @@
+@startuml {{NAME}}
+
+title {{TITLE}}
+
+start
+:{{START_ACTION}};
+
+if ({{CONDITION}}) then (yes)
+  :{{THEN_ACTION}};
+else (no)
+  :{{ELSE_ACTION}};
+endif
+
+:{{END_ACTION}};
+
+stop
+
+@enduml

@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "mcp__plugin_github_github__get_file_contents",
+      "Bash(ls:*)",
+      "Bash(dir \"D:\\\\cx\\\\.claude\")",
+      "Bash(python -m json.tool \"D:\\\\cx\\\\.claude\\\\settings.json\")",
+      "Bash(find D:cx.claude -type f \\\\\\(-name *.md -o -name *.json \\\\\\))",
+      "Bash(python -m json.tool D:cx.claudesettings.json)",
+      "Bash(python:*)",
+      "Bash(mkdir -p \"D:/cx/.claude/docs/command-docs\")",
+      "Bash(mkdir -p \"D:/cx/.claude/commands\")",
+      "Bash(find D:/cx/.claude/skills -type f -name *.md)",
+      "Bash(cp:*)",
+      "Bash(du -sh \"D:/cx/.claude/plugins/\"*)"
+    ]
+  }
+}

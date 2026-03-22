@@ -1,0 +1,15 @@
+@startuml {{NAME}}
+
+title {{TITLE}}
+
+[*] --> {{STATE1}} : {{TRANSITION1}}
+
+{{STATE1}} --> {{STATE2}} : {{TRANSITION2}}
+{{STATE1}} --> {{STATE3}} : {{TRANSITION3}}
+
+{{STATE2}} --> {{STATE4}} : {{TRANSITION4}}
+{{STATE3}} --> {{STATE4}} : {{TRANSITION5}}
+
+{{STATE4}} --> [*] : {{TRANSITION6}}
+
+@enduml

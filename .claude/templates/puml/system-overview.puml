@@ -1,0 +1,45 @@
+@startuml system-overview
+
+skinparam rectangle {
+  BackgroundColor #E3F2FD
+  BorderColor #2196F3
+  FontColor #000000
+}
+skinparam database {
+  BackgroundColor #FFF3E0
+  BorderColor #FF9800
+}
+skinparam queue {
+  BackgroundColor #E8F5E9
+  BorderColor #4CAF50
+}
+skinparam agent {
+  BackgroundColor #F3E5F5
+  BorderColor #9C27B0
+}
+
+rectangle "系统名称" {
+  rectangle "子系统 A" as SubA
+  rectangle "子系统 B" as SubB
+  rectangle "子系统 C" as SubC
+
+  database "数据库" as DB
+  queue "消息队列" as MQ
+}
+
+rectangle "外部系统" {
+  rectangle "第三方服务" as Ext
+}
+
+SubA --> SubB: 调用
+SubB --> SubC: 依赖
+SubB --> DB: 存取
+SubB --> MQ: 消息
+Ext --> SubA: 接口
+
+note right of SubB
+  核心子系统
+  处理主要业务逻辑
+end note
+
+@enduml
