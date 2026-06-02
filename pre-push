@@ -1,0 +1,228 @@
+```bash
+#!/usr/bin/env bash
+
+# ============================================================
+# CX-AICODE CodeReview Push Gate - Simple Local Version
+#
+# 安装位置：
+#   .git/hooks/pre-push
+#
+# 检查规则：
+#   1. 必须存在最新的 CodeReview-yyyyMMdd-HHmmss.md 报告
+#   2. 最新报告内不得出现 [紧急] 或 [严重]
+#   3. 最新报告的修改时间必须晚于本次 push 涉及文件的修改时间
+#
+# 适用范围：
+#   - 普通分支 push
+#   - 首次 push 新分支（保守检查当前分支全部文件）
+#   - 删除远端分支时跳过检查
+#   - tag push 暂时跳过检查
+#
+# 限制：
+#   - 当前简单版使用工作区文件 mtime，因此只允许 push 当前已检出的分支
+#   - 删除文件没有本地 mtime，暂不做时间比较
+#   - 本地 hook 可被 git push --no-verify 绕过
+# ============================================================
+
+set -u
+
+REPORT_DIR=".cx/reports/codereview"
+REPORT_PATTERN="CodeReview-????????-??????.md"
+
+TMP_FILES="$(mktemp)" || exit 1
+ISSUES_TMP="$(mktemp)" || exit 1
+STALE_FILES_TMP="$(mktemp)" || exit 1
+
+cleanup() {
+    rm -f "$TMP_FILES" "$ISSUES_TMP" "$STALE_FILES_TMP"
+}
+
+trap cleanup EXIT
+
+print_separator() {
+    echo "============================================================" >&2
+}
+
+fail() {
+    print_separator
+    echo "[CX-AICODE] Git push 已阻止" >&2
+    echo "$1" >&2
+    print_separator
+    exit 1
+}
+
+# 同时兼容 SHA-1 和 SHA-256 仓库中的全零 object ID。
+is_zero_oid() {
+    case "${1:-}" in
+        ""|*[!0]*) return 1 ;;
+        *)          return 0 ;;
+    esac
+}
+
+# 同时兼容 Git Bash / Linux 和 macOS。
+get_mtime_epoch() {
+    local file_path="$1"
+
+    if stat -c %Y "$file_path" >/dev/null 2>&1; then
+        stat -c %Y "$file_path"
+        return 0
+    fi
+
+    if stat -f %m "$file_path" >/dev/null 2>&1; then
+        stat -f %m "$file_path"
+        return 0
+    fi
+
+    fail "无法读取文件修改时间：$file_path"
+}
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" \
+    || fail "当前目录不是有效的 Git 仓库。"
+
+cd "$REPO_ROOT" \
+    || fail "无法进入项目根目录：$REPO_ROOT"
+
+HEAD_OID="$(git rev-parse HEAD 2>/dev/null)" \
+    || fail "无法获取当前分支的 HEAD。"
+
+NEED_CHECK=0
+
+# pre-push 会从标准输入传入：
+# <local-ref> <local-object-name> <remote-ref> <remote-object-name>
+while read -r LOCAL_REF LOCAL_OID REMOTE_REF REMOTE_OID
+do
+    [ -z "${LOCAL_REF:-}" ] && continue
+
+    # 删除远端 ref 时，本地 object ID 为全零值，不涉及代码新增或修改。
+    if is_zero_oid "$LOCAL_OID" || [ "$LOCAL_REF" = "(delete)" ]; then
+        continue
+    fi
+
+    # 第一版仅检查远端分支更新，暂时跳过 tag 等其他 ref。
+    case "$REMOTE_REF" in
+        refs/heads/*)
+            NEED_CHECK=1
+            ;;
+        *)
+            continue
+            ;;
+    esac
+
+    # mtime 来自当前工作区。推送其他未检出的分支时，工作区时间不可靠。
+    if [ "$LOCAL_OID" != "$HEAD_OID" ]; then
+        fail "当前简单版只支持 push 当前已检出的分支。
+
+检测到待推送分支并非当前 HEAD：
+  本地 ref：$LOCAL_REF
+  远端 ref：$REMOTE_REF
+
+请切换到对应分支后单独执行 git push。"
+    fi
+
+    if is_zero_oid "$REMOTE_OID"; then
+        # 首次推送远端新分支：保守检查该分支当前包含的全部文件。
+        git ls-tree -r --name-only -z "$LOCAL_OID" >> "$TMP_FILES" \
+            || fail "无法读取首次推送分支的文件列表：$LOCAL_REF"
+    else
+        # 普通 push：直接比较远端 commit 与本地 commit 的最终差异文件。
+        # 删除文件没有本地 mtime，因此暂不进入时间比较。
+        git diff \
+            --name-only \
+            -z \
+            --diff-filter=ACMRT \
+            "$REMOTE_OID" \
+            "$LOCAL_OID" \
+            -- \
+            >> "$TMP_FILES" \
+            || fail "无法读取本次 push 涉及的文件列表：$LOCAL_REF"
+    fi
+done
+
+# 删除分支或仅推送 tag 时无需执行 CodeReview 门禁。
+[ "$NEED_CHECK" -eq 0 ] && exit 0
+
+# 查找最新报告。yyyyMMdd-HHmmss 格式可以直接按文件名排序。
+shopt -s nullglob
+REPORT_FILES=("$REPORT_DIR"/$REPORT_PATTERN)
+shopt -u nullglob
+
+if [ "${#REPORT_FILES[@]}" -eq 0 ]; then
+    fail "未找到有效的 CodeReview 报告。
+
+请先执行：
+  /cx-codereview
+
+预期报告路径：
+  .cx/reports/codereview/CodeReview-yyyyMMdd-HHmmss.md"
+fi
+
+LATEST_REPORT="$(printf '%s\n' "${REPORT_FILES[@]}" | LC_ALL=C sort | tail -n 1)"
+
+if [ ! -f "$LATEST_REPORT" ]; then
+    fail "最新 CodeReview 报告不是有效文件：$LATEST_REPORT"
+fi
+
+# 第一版采用严格文本匹配：只要出现 [紧急] 或 [严重] 就阻止 push。
+if grep -nE '\[(紧急|严重)\]' "$LATEST_REPORT" > "$ISSUES_TMP"; then
+    print_separator
+    echo "[CX-AICODE] Git push 已阻止：CodeReview 报告包含阻断级问题。" >&2
+    echo "" >&2
+    echo "报告文件：" >&2
+    echo "  $LATEST_REPORT" >&2
+    echo "" >&2
+    echo "命中内容：" >&2
+    sed 's/^/  /' "$ISSUES_TMP" >&2
+    echo "" >&2
+    echo "请解决 [紧急] 和 [严重] 问题后，重新执行 /cx-codereview。" >&2
+    print_separator
+    exit 1
+fi
+
+REPORT_MTIME="$(get_mtime_epoch "$LATEST_REPORT")"
+
+# -z 与 read -d '' 配合使用，可正确处理包含空格的文件路径。
+while IFS= read -r -d '' FILE_PATH
+do
+    [ -z "$FILE_PATH" ] && continue
+
+    # 排除 CodeReview 报告目录自身，避免循环检查。
+    case "$FILE_PATH" in
+        .cx/reports/*)
+            continue
+            ;;
+    esac
+
+    # 删除文件或当前工作区不存在的路径暂不做 mtime 比较。
+    [ -e "$FILE_PATH" ] || continue
+
+    FILE_MTIME="$(get_mtime_epoch "$FILE_PATH")"
+
+    # 报告必须严格晚于文件修改时间。
+    if [ "$FILE_MTIME" -ge "$REPORT_MTIME" ]; then
+        printf '  - %q\n' "$FILE_PATH" >> "$STALE_FILES_TMP"
+    fi
+done < "$TMP_FILES"
+
+if [ -s "$STALE_FILES_TMP" ]; then
+    print_separator
+    echo "[CX-AICODE] Git push 已阻止：最新 CodeReview 报告已经过期。" >&2
+    echo "" >&2
+    echo "报告文件：" >&2
+    echo "  $LATEST_REPORT" >&2
+    echo "" >&2
+    echo "以下文件的修改时间不早于报告生成时间：" >&2
+    cat "$STALE_FILES_TMP" >&2
+    echo "" >&2
+    echo "请重新执行 /cx-codereview 后再次 push。" >&2
+    print_separator
+    exit 1
+fi
+
+print_separator
+echo "[CX-AICODE] CodeReview 门禁检查通过。" >&2
+echo "报告文件：" >&2
+echo "  $LATEST_REPORT" >&2
+print_separator
+
+exit 0
+``
